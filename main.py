@@ -1,4 +1,4 @@
-#! /usr/bin/env python3
+#!/usr/bin/env python3
 
 #
 # SPDX-FileCopyrightText: (c) 2020-2021 CokeMine & Its repository contributors
@@ -9,17 +9,24 @@
 
 """
 euserv auto-renew script
-       v2021.09.30
-* Captcha automatic recognition using TrueCaptcha API
-* Email notification
-* Add login failure retry mechanism
-* reformat log info
-       v2021.11.06
-* Receive renew PIN(6-digits) using mailparser parsed data download url
+
+ChangeLog
+
+v2021.09.30
+- Captcha automatic recognition using TrueCaptcha API
+- Email notification
+- Add login failure retry mechanism
+- reformat log info
+
+v2021.11.06
+- Receive renew PIN(6-digits) using mailparser parsed data download url
   workflow: auto-forward your EUserv PIN email to your mailparser inbox 
-  -> parsing PIN via mailparser 
-  -> get PIN from mailparser
-* Update kc2_security_password_get_token request
+  -> parsing PIN via mailparser -> get PIN from mailparser
+- Update kc2_security_password_get_token request
+
+v2021.11.26
+- Handle TrueCaptcha service exception
+
 """
 
 import os
@@ -109,7 +116,8 @@ def login_retry(*args, **kwargs):
                 while number < max_retry:
                     number += 1
                     if number > 1:
-                        log("[EUserv] Login tried the {}th time".format(number))
+                        ordinal = lambda n: "{}{}".format(n,"tsnrhtdd"[(n/10%10!=1)*(n%10<4)*n%10::4])
+                        log(f"[EUserv] Login tried the {ordinal(number)} time.")
                     sess_id, session = func(username, password)
                     if sess_id != "-1":
                         return sess_id, session
@@ -128,6 +136,14 @@ def captcha_solver(captcha_image_url: str, session: requests.session) -> dict:
     """
     TrueCaptcha API doc: https://apitruecaptcha.org/api
     Free to use 100 requests per day.
+    -- response::
+    {
+        "result": "", ==> Or "result": 0
+        "conf": 0.85, 
+        "usage": 0, 
+        "requestId": "ed0006e5-69f0-4617-b698-97dc054f9022", 
+        "version": "dev2"
+    }
     """
     response = session.get(captcha_image_url)
     encoded_string = base64.b64encode(response.content)
@@ -151,40 +167,46 @@ def handle_captcha_solved_result(solved: dict) -> str:
     that's what this function is for.
     """
     if "result" in solved:
-        solved_text = solved["result"]
-        if "RESULT  IS" in solved_text:
-            log("[Captcha Solver] You are using the demo apikey.")
-            print("There is no guarantee that demo apikey will work in the future!")
-            # because using demo apikey
-            text = re.findall(r"RESULT  IS . (.*) .", solved_text)[0]
-        else:
-            # using your own apikey
-            log("[Captcha Solver] You are using your own apikey.")
-            text = solved_text
-        operators = ["X", "x", "+", "-"]
-        if any(x in text for x in operators):
-            for operator in operators:
-                operator_pos = text.find(operator)
-                if operator == "x" or operator == "X":
-                    operator = "*"
-                if operator_pos != -1:
-                    left_part = text[:operator_pos]
-                    right_part = text[operator_pos + 1 :]
-                    if left_part.isdigit() and right_part.isdigit():
-                        return eval(
-                            "{left} {operator} {right}".format(
-                                left=left_part, operator=operator, right=right_part
+        solved_result = solved["result"]
+        if isinstance(solved_result, str):
+            if "RESULT  IS" in solved_result:
+                log("[Captcha Solver] You are using the demo apikey.")
+                print("There is no guarantee that demo apikey will work in the future!")
+                # because using demo apikey
+                text = re.findall(r"RESULT  IS . (.*) .", solved_result)[0]
+            else:
+                # using your own apikey
+                log("[Captcha Solver] You are using your own apikey.")
+                text = solved_result
+            operators = ["X", "x", "+", "-"]
+            if any(x in text for x in operators):
+                for operator in operators:
+                    operator_pos = text.find(operator)
+                    if operator == "x" or operator == "X":
+                        operator = "*"
+                    if operator_pos != -1:
+                        left_part = text[:operator_pos]
+                        right_part = text[operator_pos + 1 :]
+                        if left_part.isdigit() and right_part.isdigit():
+                            return eval(
+                                "{left} {operator} {right}".format(
+                                    left=left_part, operator=operator, right=right_part
+                                )
                             )
-                        )
-                    else:
-                        # Because these symbols("X", "x", "+", "-") do not appear at the same time,
-                        # it just contains an arithmetic symbol.
-                        return text
+                        else:
+                            # Because these symbols("X", "x", "+", "-") do not appear at the same time,
+                            # it just contains an arithmetic symbol.
+                            return text
+            else:
+                return text
         else:
-            return text
+            print(f"[Captcha Solver] Returned JSON: {solved}")
+            log("[Captcha Solver] Service Exception!")
+            raise ValueError("[Captcha Solver] Service Exception!")
     else:
-        print(solved)
-        raise KeyError("Failed to find parsed results.")
+        print(f"[Captcha Solver] Returned JSON: {solved}")
+        log("[Captcha Solver] Failed to find parsed results!")
+        raise KeyError("[Captcha Solver] Failed to find parsed results!")
 
 
 def get_captcha_solver_usage() -> dict:
@@ -258,38 +280,40 @@ def login(username: str, password: str) -> (str, requests.session):
         else:
             log("[Captcha Solver] 进行验证码识别...")
             solved_result = captcha_solver(captcha_image_url, session)
-            captcha_code = handle_captcha_solved_result(solved_result)
-            log("[Captcha Solver] 识别的验证码是: {}".format(captcha_code))
+            try:
+                captcha_code = handle_captcha_solved_result(solved_result)
+                log("[Captcha Solver] 识别的验证码是: {}".format(captcha_code))
 
-            if CHECK_CAPTCHA_SOLVER_USAGE:
-                usage = get_captcha_solver_usage()
-                log(
-                    "[Captcha Solver] current date {0} api usage count: {1}".format(
-                        usage[0]["date"], usage[0]["count"]
+                if CHECK_CAPTCHA_SOLVER_USAGE:
+                    usage = get_captcha_solver_usage()
+                    log(
+                        "[Captcha Solver] current date {0} api usage count: {1}".format(
+                            usage[0]["date"], usage[0]["count"]
+                        )
                     )
-                )
 
-            f2 = session.post(
-                url,
-                headers=headers,
-                data={
-                    "subaction": "login",
-                    "sess_id": sess_id,
-                    "captcha_code": captcha_code,
-                },
-            )
-            if (
-                f2.text.find(
-                    "To finish the login process please solve the following captcha."
+                f2 = session.post(
+                    url,
+                    headers=headers,
+                    data={
+                        "subaction": "login",
+                        "sess_id": sess_id,
+                        "captcha_code": captcha_code,
+                    },
                 )
-                == -1
-            ):
-                log("[Captcha Solver] 验证通过")
-                return sess_id, session
-            else:
-                log("[Captcha Solver] 验证失败")
+                if (
+                    f2.text.find(
+                        "To finish the login process please solve the following captcha."
+                    )
+                    == -1
+                ):
+                    log("[Captcha Solver] 验证通过")
+                    return sess_id, session
+                else:
+                    log("[Captcha Solver] 验证失败")
+                    return "-1", session
+            except (KeyError, ValueError):
                 return "-1", session
-
     else:
         return sess_id, session
 
