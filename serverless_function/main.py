@@ -25,7 +25,8 @@ v2021.11.06
 - Update kc2_security_password_get_token request
 
 v2021.11.26
-- Handle TrueCaptcha service exception
+- Adjust TrueCaptcha constraint parameters for high availability.
+  Plus, the CAPTCHA of EUserv is currently case-insensitive, so the above adjustment works.
 
 """
 
@@ -149,11 +150,17 @@ def captcha_solver(captcha_image_url: str, session: requests.session) -> dict:
     encoded_string = base64.b64encode(response.content)
     url = "https://api.apitruecaptcha.org/one/gettext"
 
+    # Since "case": "mixed", "mode": "human" 
+    # can sometimes cause internal errors in the truecaptcha server. 
+    # So a more relaxed constraint(lower/upper & default) is used here.
+    # Plus, the CAPTCHA of EUserv is currently case-insensitive, so the below adjustment works.
     data = {
         "userid": TRUECAPTCHA_USERID,
         "apikey": TRUECAPTCHA_APIKEY,
-        "case": "mixed",
-        "mode": "human",
+        # case sensitivity of text (upper | lower| mixed)
+        "case": "lower",
+        # use human or AI (human | default)
+        "mode": "default",
         "data": str(encoded_string)[2:-1],
     }
     r = requests.post(url=url, json=data)
