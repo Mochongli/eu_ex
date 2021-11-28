@@ -1,3 +1,4 @@
+English | [简体中文](README_sc.md)
 # eu_ex
 
 eu_ex means EUserv_extend. A Python script which can help you renew your free EUserv IPv6 VPS.
@@ -6,7 +7,7 @@ This Script can check the VPS amount in your account automatically and renew the
 
 ## How to Use
 
-1. Install Python3 and dependences
+1. Install Python3 and dependences, the following command is used in debian/ubuntu for example,
 
    ```bash
    #Install Python3
@@ -15,11 +16,11 @@ This Script can check the VPS amount in your account automatically and renew the
    pip install requests beautifulsoup4
    ```
 
-2. Replace the `USERNAME` & `PASSWORD` parameters with yours in `main.py` Line 37-38.
+2. It is not recommended to replace the `USERNAME` & `PASSWORD` parameters with yours in `main.py` Line 37-38 directly. Pass them in from environment variables.
 
    Your can add multiple accounts with single space separated.
 
-3. Your can add multiple mailparser.io parsed data download URL id with single space separated. The download URL id is in `https://files.mailparser.io/d/<download_url_id>`
+3. Your can add multiple mailparser.io parsed data download URL id with single space separated. The download URL id is in `https://files.mailparser.io/d/<download_url_id>`.
 
 4. Pass the **Actions secrets** into the environment variable of your GitHub Action runtime environment. For example, the following environment variables are required.
 
@@ -34,7 +35,7 @@ This Script can check the VPS amount in your account automatically and renew the
 ## Mail forwarding and mailparser settings
 ### Mail forwarding
 
-Take gmail as an example, forward emails to [mailparser](https://mailparser.io).
+Take gmail as an example, forward emails to [mailparser](https://mailparser.io). It is possible for non-gmail mailboxes to receive emails from euserv, provided that they can be received. Currently outlook/hotmail does not receive it.
 
 - ![gmail_filter_keys](./images/gmail_filter_keys.png)
 
@@ -67,13 +68,35 @@ Take gmail as an example, forward emails to [mailparser](https://mailparser.io).
   - mailparser_inbox_setting_2
   ![mailparser_inbox_setting_2](./images/mailparser_inbox_setting_2.png)
 
+## Final result
+The effect is as shown,
+
+![mailparser_inbox_setting_2](./images/the_final_effect.png)
+
 ## TODO
 
-- [ ] ~~Validate the `receiver` field parsed by mailparser to reduce malicious email interference.~~ Won't do due to mailparser *Inbox Settings - Email Reception*.
+- [x] ~~Validate the `receiver` field parsed by mailparser to reduce malicious email interference.~~ Won't do due to mailparser *Inbox Settings - Email Reception*.
+- [ ] Open pre-trained models to solve the problem of CAPTCHA recognition locally.
+- [ ] Log internationalization and localization.
 
 ## Acknowledgement
 
-Thanks EUserv provides us free IPv6 VPS for learning.
+- Thanks EUserv provides us free IPv6 VPS for learning.
+- Thanks CokeMine & its repository contributors provides us the original *EUserv_extend* script .The internet never forgets, but people do.
+
+## Q&A
+
+1. **Q**: It can be non-gmail mailbox?
+
+   **A**: Can be a non-gmail mailbox，the prerequisite is to receive emails from euserv. Currently outlook/hotmail does not receive it.
+
+2. **Q**: Can n mailboxes use the same mailparser or do I need to apply for n mailparsers to correspond with one?
+
+   **A**: The mailparser free account can set up to 10 inboxes, and these 10 inboxes can correspond to 10 euserv accounts, and there are 10 mailparser parsed data download URLs(ids). So, it depends on whether you have n>10, or n<10. n<10, one mailparsed account is enough, and then the parsed data download URL ids correspond to the registered email accounts of euserv.
+
+3. **Q**: How eu_ex script works?
+
+   **A**: EUserv set the first threshold from the end of September 2021, that is, the login verification code (successful verification status maintained for 24 hours), so from now on, we use the API provided by TrueCaptcha (there is a free amount every day) to identify. Not long after, about the beginning of November 2021, EUserv set a second threshold, which is the email PIN verification when renewing, and here the solution is about two kinds: a. Login to the mailbox to get the email containing EUserv PIN. b. Convert the email into HTTP REST API to get it automatically. Option b is adopted here. It seems that only [Mailparser](https://mailparser.io) and [Zapier Emails Parser](https://parser.zapier.com/) are available in option b for free quota. Option b is clearly better than option a.
 
 ## References
 
